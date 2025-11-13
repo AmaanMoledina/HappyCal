@@ -13,17 +13,17 @@ import './global.css'
 const karla = Karla({ subsets: ['latin'] })
 
 export const metadata: Metadata = {
-  metadataBase: new URL('https://crab.fit'),
+  metadataBase: new URL('https://happycal.app'),
   title: {
-    absolute: 'Crab Fit',
-    template: '%s - Crab Fit',
+    absolute: 'HappyCal',
+    template: '%s - HappyCal',
   },
-  keywords: ['crab', 'fit', 'crabfit', 'schedule', 'availability', 'availabilities', 'when2meet', 'doodle', 'meet', 'plan', 'time', 'timezone'],
+  keywords: ['happycal', 'schedule', 'availability', 'availabilities', 'when2meet', 'doodle', 'meet', 'plan', 'time', 'timezone', 'calendar'],
   description: 'Enter your availability to find a time that works for everyone!',
-  themeColor: '#F79E00',
+  themeColor: '#007AFF',
   manifest: 'manifest.json',
   openGraph: {
-    title: 'Crab Fit',
+    title: 'HappyCal',
     description: 'Enter your availability to find a time that works for everyone!',
     url: '/',
   },

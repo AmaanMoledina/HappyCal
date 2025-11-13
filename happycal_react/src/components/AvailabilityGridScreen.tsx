@@ -99,6 +99,22 @@ export function AvailabilityGridScreen({
     return availability?.people.length || 0;
   };
 
+  // Get people available at a specific slot
+  const getAvailablePeople = (serialized: string): string[] => {
+    const availability = availabilities.find(a => a.date === serialized);
+    return availability?.people || [];
+  };
+
+  // Get initials from a name
+  const getInitials = (name: string): string => {
+    return name
+      .split(' ')
+      .map(n => n[0])
+      .join('')
+      .toUpperCase()
+      .slice(0, 2);
+  };
+
   // Get heatmap color based on availability count
   const getHeatmapColor = (count: number, isSelected: boolean): string => {
     if (isSelected) return "rgb(14, 165, 233)"; // Sky-500
@@ -326,6 +342,7 @@ export function AvailabilityGridScreen({
 
                           const isSelected = selectedSlots.has(cell.serialized);
                           const availabilityCount = getAvailabilityCount(cell.serialized);
+                          const availablePeople = getAvailablePeople(cell.serialized);
                           const backgroundColor = getHeatmapColor(availabilityCount, isSelected);
 
                           return (
@@ -341,11 +358,29 @@ export function AvailabilityGridScreen({
                               onPointerDown={(e) => handlePointerDown(e, colIdx, rowIdx, cell.serialized)}
                               onPointerEnter={() => handlePointerEnter(colIdx, rowIdx)}
                               onPointerUp={handlePointerUp}
-                              title={cell.label}
+                              title={`${cell.label}${availablePeople.length > 0 ? ` - ${availablePeople.join(', ')}` : ''}`}
                             >
                               {isSelected && (
                                 <div className="absolute inset-0 flex items-center justify-center">
                                   <div className="w-2 h-2 bg-white rounded-full shadow-lg"></div>
+                                </div>
+                              )}
+                              {!isSelected && availablePeople.length > 0 && (
+                                <div className="absolute inset-0 flex items-center justify-center gap-0.5 p-1 flex-wrap">
+                                  {availablePeople.slice(0, 4).map((person, idx) => (
+                                    <div
+                                      key={idx}
+                                      className="text-[10px] font-semibold text-sky-700 bg-white/80 rounded px-1 py-0.5 shadow-sm"
+                                      title={person}
+                                    >
+                                      {getInitials(person)}
+                                    </div>
+                                  ))}
+                                  {availablePeople.length > 4 && (
+                                    <div className="text-[10px] font-semibold text-sky-700 bg-white/80 rounded px-1 py-0.5 shadow-sm">
+                                      +{availablePeople.length - 4}
+                                    </div>
+                                  )}
                                 </div>
                               )}
                             </div>

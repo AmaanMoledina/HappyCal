@@ -31,10 +31,25 @@ export const PersonResponse = z.object({
 })
 export type PersonResponse = z.infer<typeof PersonResponse>
 
+// Get auth token from localStorage (since authStore uses persist middleware)
+const getAuthToken = (): string | undefined => {
+  try {
+    const authStorage = localStorage.getItem('happycal-auth-storage');
+    if (authStorage) {
+      const parsed = JSON.parse(authStorage);
+      return parsed?.state?.accessToken || undefined;
+    }
+  } catch {
+    // Ignore errors
+  }
+  return undefined;
+}
+
 const get = async <S extends z.Schema>(url: string, schema: S, auth?: string): Promise<ReturnType<S['parse']>> => {
+  const token = auth || getAuthToken();
   const res = await fetch(new URL(url, API_BASE), {
     headers: {
-      ...auth && { Authorization: `Bearer ${auth}` },
+      ...token && { Authorization: `Bearer ${token}` },
     },
   })
     .catch(console.warn)
@@ -43,11 +58,12 @@ const get = async <S extends z.Schema>(url: string, schema: S, auth?: string): P
 }
 
 const post = async <S extends z.Schema>(url: string, schema: S, input: unknown, auth?: string, method = 'POST'): Promise<ReturnType<S['parse']>> => {
+  const token = auth || getAuthToken();
   const res = await fetch(new URL(url, API_BASE), {
     method,
     headers: {
       'Content-Type': 'application/json',
-      ...auth && { Authorization: `Bearer ${auth}` },
+      ...token && { Authorization: `Bearer ${token}` },
     },
     body: JSON.stringify(input),
   })

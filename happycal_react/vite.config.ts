@@ -54,7 +54,8 @@
       outDir: 'build',
     },
     server: {
-      port: 3000,
+      port: 3001,
+      strictPort: true, // Fail if port is already in use instead of auto-incrementing
       open: true,
     },
   });

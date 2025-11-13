@@ -1,5 +1,10 @@
 .section {
   margin: 30px 0 0;
-  background-color: var(--surface);
-  padding: 20px 0;
+  background: var(--surface-glass);
+  backdrop-filter: var(--backdrop-blur);
+  -webkit-backdrop-filter: var(--backdrop-blur);
+  border-top: 0.5px solid var(--border-glass);
+  border-bottom: 0.5px solid var(--border-glass);
+  padding: 48px 0;
+  position: relative;
 }

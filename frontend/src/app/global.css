@@ -1,57 +1,79 @@
 :root {
   color-scheme: light dark;
 
-  --primary: #F79E00;
+  --primary: #007AFF;
+  --primary-gradient: linear-gradient(135deg, #007AFF 0%, #0051D5 100%);
 
-  /* LIGHT */
-  --background-light: #FFFFFF;
-  --text-light: #000000;
-  --shadow-light: #F48600;
-  --highlight-light: #F4BB60;
-  --secondary-light: var(--shadow-light);
-  --tertiary-light: var(--highlight-light);
-  --surface-light: #FEF2DD;
-  --error-light: #D32F2F;
-  --loading-light: #DDDDDD;
-  --font-weight-light: 600;
+  /* LIGHT - Apple iOS Style */
+  --background-light: #F5F5F7;
+  --background-gradient-light: linear-gradient(180deg, #FFFFFF 0%, #F5F5F7 100%);
+  --text-light: #1D1D1F;
+  --text-secondary-light: #86868B;
+  --shadow-light: #007AFF;
+  --highlight-light: #5AC8FA;
+  --secondary-light: #34C759;
+  --tertiary-light: #8E8E93;
+  --surface-light: rgba(255, 255, 255, 0.8);
+  --surface-glass-light: rgba(255, 255, 255, 0.7);
+  --border-glass-light: rgba(0, 0, 0, 0.1);
+  --error-light: #FF3B30;
+  --loading-light: #E5E5EA;
+  --font-weight-light: 500;
+  --backdrop-blur: blur(30px) saturate(180%);
+  --shadow-glass-light: 0 4px 20px 0 rgba(0, 0, 0, 0.08), 0 1px 3px 0 rgba(0, 0, 0, 0.1);
 
-  /* DARK */
-  --background-dark: #111111;
-  --text-dark: #DDDDDD;
-  --shadow-dark: #CC7313;
-  --highlight-dark: #F4BB60;
-  --secondary-dark: var(--highlight-dark);
-  --tertiary-dark: var(--shadow-dark);
-  --surface-dark: #30240F;
-  --error-dark: #E53935;
-  --loading-dark: #444444;
+  /* DARK - Apple iOS Style */
+  --background-dark: #000000;
+  --background-gradient-dark: linear-gradient(180deg, #1C1C1E 0%, #000000 100%);
+  --text-dark: #FFFFFF;
+  --text-secondary-dark: #98989D;
+  --shadow-dark: #0A84FF;
+  --highlight-dark: #64D2FF;
+  --secondary-dark: #30D158;
+  --tertiary-dark: #636366;
+  --surface-dark: rgba(28, 28, 30, 0.8);
+  --surface-glass-dark: rgba(28, 28, 30, 0.6);
+  --border-glass-dark: rgba(255, 255, 255, 0.15);
+  --error-dark: #FF453A;
+  --loading-dark: #2C2C2E;
   --font-weight-dark: 500;
+  --shadow-glass-dark: 0 4px 20px 0 rgba(0, 0, 0, 0.5), 0 1px 3px 0 rgba(0, 0, 0, 0.3);
 
   /* Define light defaults */
   --background: var(--background-light);
+  --background-gradient: var(--background-gradient-light);
   --text: var(--text-light);
+  --text-secondary: var(--text-secondary-light);
   --shadow: var(--shadow-light);
   --highlight: var(--highlight-light);
   --secondary: var(--secondary-light);
   --tertiary: var(--tertiary-light);
   --surface: var(--surface-light);
+  --surface-glass: var(--surface-glass-light);
+  --border-glass: var(--border-glass-light);
   --error: var(--error-light);
   --loading: var(--loading-light);
   --font-weight: var(--font-weight-light);
+  --shadow-glass: var(--shadow-glass-light);
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
     --background: var(--background-dark);
+    --background-gradient: var(--background-gradient-dark);
     --text: var(--text-dark);
+    --text-secondary: var(--text-secondary-dark);
     --shadow: var(--shadow-dark);
     --highlight: var(--highlight-dark);
     --secondary: var(--secondary-dark);
     --tertiary: var(--tertiary-dark);
     --surface: var(--surface-dark);
+    --surface-glass: var(--surface-glass-dark);
+    --border-glass: var(--border-glass-dark);
     --error: var(--error-dark);
     --loading: var(--loading-dark);
     --font-weight: var(--font-weight-dark);
+    --shadow-glass: var(--shadow-glass-dark);
   }
 }
 
@@ -64,24 +86,53 @@ html {
 body {
   margin: 0;
   background: var(--background);
+  background-image: var(--background-gradient);
+  background-attachment: fixed;
   color: var(--text);
   font-weight: var(--font-weight);
-  --focus-ring: 2px solid var(--secondary);
+  --focus-ring: 2px solid var(--primary);
+  min-height: 100vh;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Apple iOS Glassmorphism utility classes */
+.glass {
+  background: var(--surface-glass);
+  backdrop-filter: var(--backdrop-blur);
+  -webkit-backdrop-filter: var(--backdrop-blur);
+  border: 0.5px solid var(--border-glass);
+  box-shadow: var(--shadow-glass);
+  border-radius: 20px;
+}
+
+.glass-strong {
+  background: var(--surface);
+  backdrop-filter: var(--backdrop-blur);
+  -webkit-backdrop-filter: var(--backdrop-blur);
+  border: 0.5px solid var(--border-glass);
+  box-shadow: var(--shadow-glass);
+  border-radius: 20px;
 }
 
 .light {
   color-scheme: light;
 
   --background: var(--background-light);
+  --background-gradient: var(--background-gradient-light);
   --text: var(--text-light);
+  --text-secondary: var(--text-secondary-light);
   --shadow: var(--shadow-light);
   --highlight: var(--highlight-light);
   --secondary: var(--secondary-light);
   --tertiary: var(--tertiary-light);
   --surface: var(--surface-light);
+  --surface-glass: var(--surface-glass-light);
+  --border-glass: var(--border-glass-light);
   --error: var(--error-light);
   --loading: var(--loading-light);
   --font-weight: var(--font-weight-light);
+  --shadow-glass: var(--shadow-glass-light);
 }
 
 @media not print {
@@ -89,15 +140,20 @@ body {
     color-scheme: dark;
 
     --background: var(--background-dark);
+    --background-gradient: var(--background-gradient-dark);
     --text: var(--text-dark);
+    --text-secondary: var(--text-secondary-dark);
     --shadow: var(--shadow-dark);
     --highlight: var(--highlight-dark);
     --secondary: var(--secondary-dark);
     --tertiary: var(--tertiary-dark);
     --surface: var(--surface-dark);
+    --surface-glass: var(--surface-glass-dark);
+    --border-glass: var(--border-glass-dark);
     --error: var(--error-dark);
     --loading: var(--loading-dark);
     --font-weight: var(--font-weight-dark);
+    --shadow-glass: var(--shadow-glass-dark);
   }
 }
 
@@ -117,23 +173,24 @@ a:focus-visible {
 }
 
 *::-webkit-scrollbar {
-  width: 16px;
-  height: 16px;
+  width: 8px;
+  height: 8px;
 }
 *::-webkit-scrollbar-track {
-  background: var(--surface);
+  background: transparent;
 }
 *::-webkit-scrollbar-thumb {
-  border-radius: 100px;
-  border: 4px solid var(--surface);
-  width: 12px;
+  border-radius: 4px;
   background: var(--tertiary);
+  opacity: 0.5;
 }
 *::-webkit-scrollbar-thumb:hover {
-  background: var(--primary);
+  opacity: 0.8;
+  background: var(--text-secondary);
 }
 *::-webkit-scrollbar-thumb:active {
-  background: var(--secondary);
+  opacity: 1;
+  background: var(--text-secondary);
 }
 
 input[type=checkbox], input[type=radio] {

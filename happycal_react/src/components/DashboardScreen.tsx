@@ -1,11 +1,13 @@
 import { useState, useEffect, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
+import { useMsal } from "@azure/msal-react";
 import { Card } from "./ui/card";
 import { Button } from "./ui/button";
 import { Avatar, AvatarFallback } from "./ui/avatar";
 import { Badge } from "./ui/badge";
-import { Users, Calendar, Clock, TrendingUp, Plus, Bell, CalendarDays, Loader2 } from "lucide-react";
+import { Users, Calendar, Clock, TrendingUp, Plus, Bell, CalendarDays, Loader2, LogOut } from "lucide-react";
 import { useEventsStore } from "../stores/eventsStore";
+import { useAuthStore } from "../stores/authStore";
 import { getEvent, getPeople, type EventResponse } from "../config/api";
 
 interface Group {
@@ -35,9 +37,40 @@ interface EventWithDetails extends EventResponse {
 
 export function DashboardScreen({ groups, onGroupClick, onScheduleMeeting, onScheduleEvent }: DashboardScreenProps) {
   const navigate = useNavigate();
+  const { instance } = useMsal();
+  const { account, clearAuth } = useAuthStore();
   const storedEvents = useEventsStore((state) => state.events);
   const [eventsWithDetails, setEventsWithDetails] = useState<EventWithDetails[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+
+  // Get user info from account
+  const userName = account?.name || account?.username || 'User';
+  const userEmail = account?.username || '';
+  const userInitials = useMemo(() => {
+    if (account?.name) {
+      return account.name
+        .split(' ')
+        .map(n => n[0])
+        .join('')
+        .toUpperCase()
+        .slice(0, 2);
+    }
+    if (userEmail) {
+      return userEmail[0].toUpperCase();
+    }
+    return 'U';
+  }, [account, userEmail]);
+
+  const handleSignOut = async () => {
+    try {
+      await instance.logoutPopup();
+      clearAuth();
+      // Navigate to login - you might need to update this based on your routing
+      window.location.href = '/';
+    } catch (error) {
+      console.error("Sign out error:", error);
+    }
+  };
 
   // Fetch details for all stored events
   useEffect(() => {
@@ -104,9 +137,26 @@ export function DashboardScreen({ groups, onGroupClick, onScheduleMeeting, onSch
               <Bell className="w-5 h-5 text-gray-700" />
               <span className="absolute -top-1 -right-1 w-2 h-2 bg-red-500 rounded-full"></span>
             </Button>
-            <Avatar className="w-9 h-9 cursor-pointer ring-2 ring-white/60 shadow-lg">
-              <AvatarFallback className="bg-gradient-to-br from-sky-500 to-blue-600 text-white">JD</AvatarFallback>
-            </Avatar>
+            <div className="flex items-center gap-2">
+              <div className="text-right hidden sm:block">
+                <p className="text-sm font-medium text-gray-900">{userName}</p>
+                <p className="text-xs text-gray-600">{userEmail}</p>
+              </div>
+              <Avatar className="w-9 h-9 cursor-pointer ring-2 ring-white/60 shadow-lg">
+                <AvatarFallback className="bg-gradient-to-br from-sky-500 to-blue-600 text-white">
+                  {userInitials}
+                </AvatarFallback>
+              </Avatar>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={handleSignOut}
+                className="text-gray-700 hover:text-gray-900"
+                title="Sign out"
+              >
+                <LogOut className="w-4 h-4" />
+              </Button>
+            </div>
           </div>
         </div>
       </header>
@@ -115,8 +165,8 @@ export function DashboardScreen({ groups, onGroupClick, onScheduleMeeting, onSch
         <div className="space-y-8">
           {/* Welcome Section */}
           <div className="space-y-2">
-            <h1 className="text-gray-900">{getGreeting()}, John! 👋</h1>
-            <p className="text-gray-600">Manage your Kellogg events and stay connected with your cohort</p>
+            <h1 className="text-gray-900">{getGreeting()}, {userName.split(' ')[0]}! 👋</h1>
+            <p className="text-gray-600">Manage your university events and stay connected with your groups</p>
           </div>
 
           {/* Quick Stats */}

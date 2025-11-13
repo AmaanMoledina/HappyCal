@@ -200,7 +200,7 @@ export function CreateEventScreen({ onBack, onViewGrid }: CreateEventScreenProps
                     </div>
                   </motion.div>
 
-                  {/* Time Range */}
+                  {/* Availability Window */}
                   <motion.div
                     initial={{ opacity: 0, x: -20 }}
                     animate={{ opacity: 1, x: 0 }}
@@ -209,11 +209,12 @@ export function CreateEventScreen({ onBack, onViewGrid }: CreateEventScreenProps
                   >
                     <Label className="flex items-center gap-2">
                       <Clock className="w-4 h-4 text-gray-600" />
-                      Time Range (each day)
+                      Availability Window
                     </Label>
+                    <p className="text-sm text-gray-600">Select the time range when people can indicate their availability</p>
                     <div className="grid grid-cols-2 gap-4">
                       <div className="space-y-2">
-                        <Label className="text-sm text-gray-600">Earliest</Label>
+                        <Label className="text-sm text-gray-600">From</Label>
                         <select
                           value={earliestTime}
                           onChange={(e) => setEarliestTime(e.target.value)}
@@ -227,7 +228,7 @@ export function CreateEventScreen({ onBack, onViewGrid }: CreateEventScreenProps
                         </select>
                       </div>
                       <div className="space-y-2">
-                        <Label className="text-sm text-gray-600">Latest</Label>
+                        <Label className="text-sm text-gray-600">To</Label>
                         <select
                           value={latestTime}
                           onChange={(e) => setLatestTime(e.target.value)}
@@ -321,7 +322,7 @@ export function CreateEventScreen({ onBack, onViewGrid }: CreateEventScreenProps
                     </div>
                   </div>
                   <div>
-                    <p className="text-sm text-gray-600 mb-1">Time Window</p>
+                    <p className="text-sm text-gray-600 mb-1">Availability Window</p>
                     <p className="text-gray-900">{earliestTime} - {latestTime}</p>
                   </div>
                 </motion.div>
@@ -333,31 +334,37 @@ export function CreateEventScreen({ onBack, onViewGrid }: CreateEventScreenProps
                   transition={{ delay: 0.4 }}
                   className="space-y-3"
                 >
-                  <Label className="text-gray-700">Shareable Link</Label>
+                  <div className="flex items-center justify-between">
+                    <Label className="text-gray-700 font-medium">Shareable Link</Label>
+                    <p className="text-xs text-gray-500">Share this link to collect availability</p>
+                  </div>
                   <div className="flex gap-2">
-                    <div className="flex-1 px-4 py-3 backdrop-blur-sm bg-white/30 border border-white/40 rounded-lg text-gray-800 text-sm break-all">
+                    <div className="flex-1 px-4 py-3 backdrop-blur-sm bg-white/40 border border-white/50 rounded-lg text-gray-900 text-sm break-all font-mono">
                       {generatedLink}
                     </div>
                     <Button
                       onClick={handleCopyLink}
-                      className="backdrop-blur-sm bg-white/40 hover:bg-white/60 border border-white/50 text-gray-900 shrink-0"
+                      className="backdrop-blur-sm bg-white/50 hover:bg-white/70 border border-white/60 text-gray-900 shrink-0 shadow-md"
                       variant="outline"
+                      size="icon"
                     >
                       {linkCopied ? (
-                        <Check className="w-4 h-4 text-green-600" />
+                        <Check className="w-5 h-5 text-green-600" />
                       ) : (
-                        <Copy className="w-4 h-4" />
+                        <Copy className="w-5 h-5" />
                       )}
                     </Button>
                   </div>
-                  <motion.p
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: linkCopied ? 1 : 0 }}
-                    className="text-sm text-green-600 flex items-center gap-1"
+                  <motion.div
+                    initial={{ opacity: 0, height: 0 }}
+                    animate={{ opacity: linkCopied ? 1 : 0, height: linkCopied ? 'auto' : 0 }}
+                    className="overflow-hidden"
                   >
-                    <Check className="w-3 h-3" />
-                    Link copied to clipboard!
-                  </motion.p>
+                    <p className="text-sm text-green-600 flex items-center gap-2 font-medium">
+                      <Check className="w-4 h-4" />
+                      Link copied to clipboard!
+                    </p>
+                  </motion.div>
                 </motion.div>
 
                 {/* Action Buttons */}

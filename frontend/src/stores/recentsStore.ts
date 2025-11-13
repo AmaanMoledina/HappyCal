@@ -32,7 +32,7 @@ const useRecentsStore = create<RecentsStore>()(persist(
     clearRecents: () => set({ recents: [] }),
   }),
   {
-    name: 'crabfit-recent',
+    name: 'happycal-recent',
     version: 1,
     migrate: (persistedState, version) => {
       if (version === 0) {

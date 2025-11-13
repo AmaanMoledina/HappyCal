@@ -33,7 +33,7 @@
   },
   "offline": {
     "title": "You are offline",
-    "body": "A Crab Fit doesn't work offline.<br />Make sure you're connected to the internet and try again."
+    "body": "HappyCal doesn't work offline.<br />Make sure you're connected to the internet and try again."
   },
   "error": {
     "title": "Event not found",

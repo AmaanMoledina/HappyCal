@@ -1,9 +1,11 @@
 import { useState } from "react";
-import { motion, AnimatePresence } from "motion/react";
+import { motion } from "motion/react";
+import { useMsal } from "@azure/msal-react";
 import { Button } from "./ui/button";
-import { Input } from "./ui/input";
-import { Label } from "./ui/label";
-import { CalendarDays, Mail, Lock, User, Sparkles } from "lucide-react";
+import { CalendarDays } from "lucide-react";
+import OutlookIcon from "./OutlookIcon";
+import { useAuthStore } from "../stores/authStore";
+import { LoginRequest } from "@azure/msal-browser";
 
 interface LoginScreenProps {
   onLogin: () => void;
@@ -21,14 +23,66 @@ const smoothTransition = {
 };
 
 export function LoginScreen({ onLogin }: LoginScreenProps) {
-  const [isLogin, setIsLogin] = useState(true);
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [name, setName] = useState("");
+  const { instance } = useMsal();
+  const { setAccount, setAccessToken } = useAuthStore();
+  const [isLoadingOutlook, setIsLoadingOutlook] = useState(false);
+  const [outlookError, setOutlookError] = useState<string | null>(null);
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    onLogin();
+  const handleOutlookSignIn = async () => {
+    setIsLoadingOutlook(true);
+    setOutlookError(null);
+    
+    try {
+      // Get redirect URI from config (should match Azure AD)
+      const redirectUri = import.meta.env.VITE_AZURE_REDIRECT_URI || window.location.origin;
+      
+      // Define the login request with the scopes you need
+      const loginRequest: LoginRequest = {
+        scopes: ['User.Read', 'email', 'profile'],
+        redirectUri: redirectUri,
+      };
+
+      // Use popup for better UX
+      const response = await instance.loginPopup(loginRequest);
+      
+      // Set the account in the store
+      if (response.account) {
+        setAccount(response.account);
+        
+        // Get access token
+        try {
+          const tokenResponse = await instance.acquireTokenSilent({
+            scopes: loginRequest.scopes,
+            account: response.account,
+          });
+          
+          setAccessToken(tokenResponse.accessToken);
+          
+          // Call the onLogin callback to proceed
+          onLogin();
+        } catch (tokenError: any) {
+          console.error("Token acquisition error:", tokenError);
+          setOutlookError(`Failed to get access token: ${tokenError.message || 'Unknown error'}`);
+        }
+      } else {
+        setOutlookError('No account returned from login');
+      }
+    } catch (error: any) {
+      console.error("Outlook sign-in error:", error);
+      
+      // Provide user-friendly error messages
+      if (error.errorCode === 'user_cancelled') {
+        setOutlookError('Sign-in was cancelled. Please try again.');
+      } else if (error.errorCode === 'popup_window_error') {
+        setOutlookError('Popup was blocked. Please allow popups for this site and try again.');
+      } else if (error.errorCode === 'invalid_request') {
+        setOutlookError('Configuration error: Redirect URI mismatch. Please check Azure AD settings.');
+      } else {
+        setOutlookError(`Sign-in failed: ${error.message || error.errorCode || 'Unknown error'}. Check console for details.`);
+      }
+    } finally {
+      setIsLoadingOutlook(false);
+    }
   };
 
   const floatingElements = [
@@ -92,189 +146,51 @@ export function LoginScreen({ onLogin }: LoginScreenProps) {
             >
               Welcome to HappyCal
             </motion.h1>
-            <AnimatePresence mode="wait">
-              <motion.p
-                key={isLogin ? "login-text" : "register-text"}
-                initial={{ opacity: 0, y: 10 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -10 }}
-                transition={smoothTransition}
-                className="text-gray-600 text-center"
-              >
-                {isLogin ? "Sign in to manage your university events" : "Create your account to get started"}
-              </motion.p>
-            </AnimatePresence>
-          </div>
-
-          {/* Toggle buttons */}
-          <div className="flex gap-2 mb-6 backdrop-blur-xl bg-white/10 p-1 rounded-xl relative">
-            <motion.div
-              className="absolute top-1 bottom-1 rounded-lg bg-gradient-to-r from-sky-500 to-blue-600 shadow-lg"
-              initial={false}
-              animate={{
-                left: isLogin ? "4px" : "50%",
-                right: isLogin ? "50%" : "4px",
-              }}
-              transition={springTransition}
-            />
-            <button
-              onClick={() => setIsLogin(true)}
-              className={`flex-1 py-2 rounded-lg transition-colors relative z-10 ${
-                isLogin ? "text-white" : "text-gray-700 hover:text-gray-900"
-              }`}
-            >
-              Login
-            </button>
-            <button
-              onClick={() => setIsLogin(false)}
-              className={`flex-1 py-2 rounded-lg transition-colors relative z-10 ${
-                !isLogin ? "text-white" : "text-gray-700 hover:text-gray-900"
-              }`}
-            >
-              Register
-            </button>
-          </div>
-
-          {/* Form */}
-          <form onSubmit={handleSubmit} className="space-y-5">
-            <AnimatePresence mode="wait">
-              {!isLogin && (
-                <motion.div
-                  key="name-field"
-                  initial={{ opacity: 0, height: 0, marginBottom: 0 }}
-                  animate={{ opacity: 1, height: "auto", marginBottom: 20 }}
-                  exit={{ opacity: 0, height: 0, marginBottom: 0 }}
-                  transition={smoothTransition}
-                  className="space-y-2 overflow-hidden"
-                >
-                  <Label htmlFor="name" className="text-gray-700">Full Name</Label>
-                  <div className="relative">
-                    <User className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-500" />
-                    <Input
-                      id="name"
-                      type="text"
-                      placeholder="John Doe"
-                      value={name}
-                      onChange={(e) => setName(e.target.value)}
-                      className="pl-10 backdrop-blur-sm bg-white/30 border-white/40 focus:bg-white/50 text-gray-900 placeholder:text-gray-600 transition-all"
-                    />
-                  </div>
-                </motion.div>
-              )}
-            </AnimatePresence>
-
-            <motion.div
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ ...smoothTransition, delay: 0.1 }}
-              className="space-y-2"
-            >
-              <Label htmlFor="email" className="text-gray-700">Email Address</Label>
-              <div className="relative">
-                <Mail className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-500" />
-                <Input
-                  id="email"
-                  type="email"
-                  placeholder="john.doe@kellogg.northwestern.edu"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  className="pl-10 backdrop-blur-sm bg-white/30 border-white/40 focus:bg-white/50 text-gray-900 placeholder:text-gray-600 transition-all"
-                />
-              </div>
-            </motion.div>
-
-            <motion.div
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ ...smoothTransition, delay: 0.2 }}
-              className="space-y-2"
-            >
-              <Label htmlFor="password" className="text-gray-700">Password</Label>
-              <div className="relative">
-                <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-500" />
-                <Input
-                  id="password"
-                  type="password"
-                  placeholder="••••••••"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  className="pl-10 backdrop-blur-sm bg-white/30 border-white/40 focus:bg-white/50 text-gray-900 placeholder:text-gray-600 transition-all"
-                />
-              </div>
-            </motion.div>
-
-            <AnimatePresence mode="wait">
-              {isLogin && (
-                <motion.div
-                  key="remember-field"
-                  initial={{ opacity: 0, height: 0 }}
-                  animate={{ opacity: 1, height: "auto" }}
-                  exit={{ opacity: 0, height: 0 }}
-                  transition={smoothTransition}
-                  className="flex items-center justify-between text-sm overflow-hidden"
-                >
-                  <label className="flex items-center gap-2 text-gray-700 cursor-pointer">
-                    <input type="checkbox" className="rounded border-white/40" />
-                    Remember me
-                  </label>
-                  <button type="button" className="text-sky-700 hover:text-sky-800 transition-colors">
-                    Forgot password?
-                  </button>
-                </motion.div>
-              )}
-            </AnimatePresence>
-
-            <motion.div
+            <motion.p
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ ...smoothTransition, delay: 0.3 }}
+              className="text-gray-600 text-center"
             >
-              <Button
-                type="submit"
-                className="w-full bg-gradient-to-r from-sky-500 to-blue-600 hover:from-sky-600 hover:to-blue-700 shadow-lg shadow-sky-500/30 border-0 group transition-all"
-              >
-                <Sparkles className="w-4 h-4 mr-2 group-hover:rotate-12 transition-transform" />
-                <AnimatePresence mode="wait">
-                  <motion.span
-                    key={isLogin ? "signin" : "create"}
-                    initial={{ opacity: 0, y: 10 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    exit={{ opacity: 0, y: -10 }}
-                    transition={{ duration: 0.2 }}
-                  >
-                    {isLogin ? "Sign In" : "Create Account"}
-                  </motion.span>
-                </AnimatePresence>
-              </Button>
-            </motion.div>
-          </form>
+              Sign in with your Outlook account to manage your university events
+            </motion.p>
+          </div>
 
-          {/* Additional info */}
+          {/* Outlook Sign In Button */}
           <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            transition={{ delay: 0.4 }}
-            className="mt-6 text-center"
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ ...smoothTransition, delay: 0.4 }}
+            className="space-y-2"
           >
-            <p className="text-sm text-gray-600">
-              <AnimatePresence mode="wait">
-                <motion.span
-                  key={isLogin ? "no-account" : "have-account"}
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  exit={{ opacity: 0 }}
-                  transition={{ duration: 0.2 }}
-                >
-                  {isLogin ? "Don't have an account? " : "Already have an account? "}
-                </motion.span>
-              </AnimatePresence>
-              <button
-                onClick={() => setIsLogin(!isLogin)}
-                className="text-sky-700 hover:text-sky-800 transition-colors"
+            <Button
+              type="button"
+              onClick={handleOutlookSignIn}
+              disabled={isLoadingOutlook}
+              className="w-full bg-gradient-to-r from-sky-500 to-blue-600 hover:from-sky-600 hover:to-blue-700 shadow-lg shadow-sky-500/30 border-0 transition-all disabled:opacity-50"
+              size="lg"
+            >
+              {isLoadingOutlook ? (
+                <>
+                  <div className="w-5 h-5 mr-2 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                  <span>Signing in...</span>
+                </>
+              ) : (
+                <>
+                  <OutlookIcon className="w-5 h-5 mr-2" />
+                  <span>Sign in with Outlook</span>
+                </>
+              )}
+            </Button>
+            {outlookError && (
+              <motion.div
+                initial={{ opacity: 0, height: 0 }}
+                animate={{ opacity: 1, height: "auto" }}
+                className="p-3 bg-red-500/20 border border-red-500/50 rounded-lg text-sm text-red-700"
               >
-                {isLogin ? "Sign up" : "Sign in"}
-              </button>
-            </p>
+                {outlookError}
+              </motion.div>
+            )}
           </motion.div>
 
           {/* Decorative elements */}
