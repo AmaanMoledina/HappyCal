@@ -5,22 +5,17 @@ import { Card } from "./ui/card";
 import { Button } from "./ui/button";
 import { Avatar, AvatarFallback } from "./ui/avatar";
 import { Badge } from "./ui/badge";
-import { Users, Calendar, Clock, TrendingUp, Plus, Bell, CalendarDays, Loader2, LogOut } from "lucide-react";
+import { Users, Calendar, Clock, TrendingUp, Plus, Bell, CalendarDays, Loader2, LogOut, Trash2 } from "lucide-react";
 import { useEventsStore } from "../stores/eventsStore";
+import { useGroupsStore } from "../stores/groupsStore";
 import { useAuthStore } from "../stores/authStore";
 import { getEvent, getPeople, type EventResponse } from "../config/api";
 
-interface Group {
-  id: string;
-  name: string;
-  memberCount: number;
-}
-
 interface DashboardScreenProps {
-  groups: Group[];
   onGroupClick: (groupId: string) => void;
   onScheduleMeeting: (groupId: string) => void;
   onScheduleEvent: () => void;
+  onCreateGroup: () => void;
 }
 
 const getGreeting = () => {
@@ -35,11 +30,14 @@ interface EventWithDetails extends EventResponse {
   isLoading?: boolean;
 }
 
-export function DashboardScreen({ groups, onGroupClick, onScheduleMeeting, onScheduleEvent }: DashboardScreenProps) {
+export function DashboardScreen({ onGroupClick, onScheduleMeeting, onScheduleEvent, onCreateGroup }: DashboardScreenProps) {
   const navigate = useNavigate();
   const { instance } = useMsal();
   const { account, clearAuth } = useAuthStore();
   const storedEvents = useEventsStore((state) => state.events);
+  const removeEvent = useEventsStore((state) => state.removeEvent);
+  const groups = useGroupsStore((state) => state.groups);
+  const deleteGroup = useGroupsStore((state) => state.deleteGroup);
   const [eventsWithDetails, setEventsWithDetails] = useState<EventWithDetails[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
@@ -116,6 +114,19 @@ export function DashboardScreen({ groups, onGroupClick, onScheduleMeeting, onSch
   const sortedEvents = useMemo(() => {
     return [...eventsWithDetails].sort((a, b) => b.created_at - a.created_at);
   }, [eventsWithDetails]);
+
+  const handleDeleteEvent = (eventId: string, eventName: string) => {
+    if (window.confirm(`Are you sure you want to delete "${eventName}"? This action cannot be undone.`)) {
+      removeEvent(eventId);
+      setEventsWithDetails(prev => prev.filter(e => e.id !== eventId));
+    }
+  };
+
+  const handleDeleteGroup = (groupId: string, groupName: string) => {
+    if (window.confirm(`Are you sure you want to delete "${groupName}"? This will remove the group and all its members. This action cannot be undone.`)) {
+      deleteGroup(groupId);
+    }
+  };
 
   // Get upcoming events (next 2)
   const upcomingEvents = useMemo(() => {
@@ -244,10 +255,12 @@ export function DashboardScreen({ groups, onGroupClick, onScheduleMeeting, onSch
                     return (
                       <div
                         key={event.id}
-                        className="flex items-center justify-between p-3 rounded-lg backdrop-blur-xl bg-white/20 hover:bg-white/30 transition-all cursor-pointer"
-                        onClick={() => navigate(`/${event.id}`)}
+                        className="flex items-center justify-between p-3 rounded-lg backdrop-blur-xl bg-white/20 hover:bg-white/30 transition-all group"
                       >
-                        <div className="flex items-center gap-3 flex-1">
+                        <div 
+                          className="flex items-center gap-3 flex-1 cursor-pointer"
+                          onClick={() => navigate(`/${event.id}`)}
+                        >
                           <div className={`w-2 h-2 rounded-full ${isRecent ? 'bg-sky-500' : 'bg-gray-400'}`}></div>
                           <div className="flex-1">
                             <p className="text-gray-900 font-medium">{event.name}</p>
@@ -257,15 +270,28 @@ export function DashboardScreen({ groups, onGroupClick, onScheduleMeeting, onSch
                             </p>
                           </div>
                         </div>
-                        <Badge 
-                          className={`${
-                            (event.peopleCount || 0) > 0 
-                              ? 'bg-emerald-500/20 text-emerald-700 border-emerald-300/50' 
-                              : 'bg-amber-500/20 text-amber-700 border-amber-300/50'
-                          }`}
-                        >
-                          {(event.peopleCount || 0) > 0 ? 'Active' : 'Pending'}
-                        </Badge>
+                        <div className="flex items-center gap-2">
+                          <Badge 
+                            className={`${
+                              (event.peopleCount || 0) > 0 
+                                ? 'bg-emerald-500/20 text-emerald-700 border-emerald-300/50' 
+                                : 'bg-amber-500/20 text-amber-700 border-amber-300/50'
+                            }`}
+                          >
+                            {(event.peopleCount || 0) > 0 ? 'Active' : 'Pending'}
+                          </Badge>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleDeleteEvent(event.id, event.name);
+                            }}
+                            className="opacity-0 group-hover:opacity-100 transition-opacity text-red-600 hover:text-red-700 hover:bg-red-50/50"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </Button>
+                        </div>
                       </div>
                     );
                   })}
@@ -288,37 +314,76 @@ export function DashboardScreen({ groups, onGroupClick, onScheduleMeeting, onSch
 
           {/* Groups Grid */}
           <div className="space-y-4">
-            <h3 className="text-gray-900">All Study Groups & Clubs</h3>
-            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-              {groups.map((group) => (
-                <Card
-                  key={group.id}
-                  className="p-6 backdrop-blur-2xl bg-white/15 border border-white/20 shadow-lg hover:shadow-2xl hover:bg-white/25 transition-all cursor-pointer group"
-                  onClick={() => onGroupClick(group.id)}
-                >
-                  <div className="space-y-4">
-                    <div>
-                      <h3 className="text-gray-900 mb-2 group-hover:text-sky-700 transition-colors">{group.name}</h3>
-                      <div className="flex items-center gap-2 text-gray-700">
-                        <Users className="w-4 h-4" />
-                        <span className="text-sm">{group.memberCount} members</span>
-                      </div>
-                    </div>
-                    
-                    <Button
-                      size="sm"
-                      className="w-full bg-gradient-to-r from-sky-500 to-blue-600 hover:from-sky-600 hover:to-blue-700 shadow-lg shadow-sky-500/30 border-0"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        onScheduleMeeting(group.id);
-                      }}
-                    >
-                      Schedule Group Meeting
-                    </Button>
-                  </div>
-                </Card>
-              ))}
+            <div className="flex items-center justify-between">
+              <h3 className="text-gray-900">My Groups</h3>
+              <Button
+                onClick={onCreateGroup}
+                className="bg-gradient-to-r from-sky-500 to-blue-600 hover:from-sky-600 hover:to-blue-700 shadow-lg shadow-sky-500/30 border-0"
+                size="sm"
+              >
+                <Plus className="w-4 h-4 mr-2" />
+                Create Group
+              </Button>
             </div>
+            {groups.length === 0 ? (
+              <Card className="p-8 backdrop-blur-2xl bg-white/15 border border-white/20 shadow-lg text-center">
+                <Users className="w-12 h-12 mx-auto mb-4 text-gray-400" />
+                <p className="text-gray-600 mb-4">You don't have any groups yet.</p>
+                <Button
+                  onClick={onCreateGroup}
+                  className="bg-gradient-to-r from-sky-500 to-blue-600 hover:from-sky-600 hover:to-blue-700 shadow-lg shadow-sky-500/30 border-0"
+                >
+                  <Plus className="w-4 h-4 mr-2" />
+                  Create Your First Group
+                </Button>
+              </Card>
+            ) : (
+              <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+                {groups.map((group) => (
+                  <Card
+                    key={group.id}
+                    className="p-6 backdrop-blur-2xl bg-white/15 border border-white/20 shadow-lg hover:shadow-2xl hover:bg-white/25 transition-all group"
+                  >
+                    <div className="space-y-4">
+                      <div className="flex items-start justify-between">
+                        <div 
+                          className="flex-1 cursor-pointer"
+                          onClick={() => onGroupClick(group.id)}
+                        >
+                          <h3 className="text-gray-900 mb-2 group-hover:text-sky-700 transition-colors">{group.name}</h3>
+                          <div className="flex items-center gap-2 text-gray-700">
+                            <Users className="w-4 h-4" />
+                            <span className="text-sm">{group.memberCount} {group.memberCount === 1 ? 'member' : 'members'}</span>
+                          </div>
+                        </div>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleDeleteGroup(group.id, group.name);
+                          }}
+                          className="opacity-0 group-hover:opacity-100 transition-opacity text-red-600 hover:text-red-700 hover:bg-red-50/50 shrink-0"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </Button>
+                      </div>
+                      
+                      <Button
+                        size="sm"
+                        className="w-full bg-gradient-to-r from-sky-500 to-blue-600 hover:from-sky-600 hover:to-blue-700 shadow-lg shadow-sky-500/30 border-0"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onScheduleMeeting(group.id);
+                        }}
+                      >
+                        Schedule Group Meeting
+                      </Button>
+                    </div>
+                  </Card>
+                ))}
+              </div>
+            )}
           </div>
         </div>
       </main>

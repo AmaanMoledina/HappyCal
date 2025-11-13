@@ -18,6 +18,62 @@ export function EventViewScreen() {
   const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
   const locale = navigator.language || 'en-US';
 
+  // Convert event times to dates for the grid (must be before early returns)
+  const expandedTimes = useMemo(() => {
+    if (!event?.times) return [];
+    return expandTimes(event.times);
+  }, [event?.times]);
+  
+  // Calculate dates and time range from event times (must be before early returns)
+  const { dates, startTime, endTime } = useMemo(() => {
+    if (expandedTimes.length === 0) return { dates: [], startTime: "9:00 AM", endTime: "5:00 PM" };
+    
+    // Extract unique dates and time range from time slots
+    const dateSet = new Set<string>();
+    const hours: number[] = [];
+    
+    expandedTimes.forEach(time => {
+      if (time.length === 13) { // HHmm-DDMMYYYY format
+        const dateStr = time.substring(5);
+        const day = dateStr.substring(0, 2);
+        const month = dateStr.substring(2, 4);
+        const year = dateStr.substring(4);
+        dateSet.add(`${year}-${month}-${day}`);
+        
+        // Extract hour
+        const hour = parseInt(time.substring(0, 2));
+        hours.push(hour);
+      }
+    });
+    
+    const dates = Array.from(dateSet).map(dateStr => {
+      const [year, month, day] = dateStr.split('-').map(Number);
+      return new Date(year, month - 1, day);
+    }).sort((a, b) => a.getTime() - b.getTime());
+    
+    // Calculate time range
+    const minHour = Math.min(...hours);
+    const maxHour = Math.max(...hours);
+    
+    const formatTime = (hour: number) => {
+      const period = hour >= 12 ? 'PM' : 'AM';
+      const hour12 = hour > 12 ? hour - 12 : hour === 0 ? 12 : hour;
+      return `${hour12}:00 ${period}`;
+    };
+    
+    return {
+      dates,
+      startTime: formatTime(minHour),
+      endTime: formatTime(maxHour + 1), // Add 1 hour for end time
+    };
+  }, [expandedTimes]);
+
+  // Convert PersonResponse to Person format (must be before early returns)
+  const peopleForCalculation: Person[] = useMemo(() => 
+    people.map(p => ({ name: p.name, availability: p.availability })),
+    [people]
+  );
+
   // Fetch event data
   useEffect(() => {
     if (!eventId) {
@@ -31,17 +87,34 @@ export function EventViewScreen() {
         setIsLoading(true);
         setError(null);
         
+        console.log('Fetching event:', eventId);
+        
         // Fetch event and people data in parallel
         const [eventData, peopleData] = await Promise.all([
           getEvent(eventId),
           getPeople(eventId).catch(() => []), // People might not exist yet
         ]);
 
+        console.log('Event data received:', eventData);
         setEvent(eventData);
         setPeople(peopleData);
-      } catch (err) {
+      } catch (err: any) {
         console.error("Failed to fetch event:", err);
-        setError("Event not found or failed to load");
+        console.error("Error details:", {
+          status: err?.status,
+          statusText: err?.statusText,
+          message: err?.message,
+          eventId: eventId,
+        });
+        
+        // Provide more specific error messages
+        if (err?.status === 404) {
+          setError(`Event "${eventId}" not found. The event may have been deleted, the link is incorrect, or it was never created. Please check the event ID and try creating a new event.`);
+        } else if (err?.status === 0 || err?.message?.includes('fetch')) {
+          setError("Network error: Could not connect to the API. Please check your connection.");
+        } else {
+          setError(`Failed to load event: ${err?.message || err?.statusText || 'Unknown error'}`);
+        }
       } finally {
         setIsLoading(false);
       }
@@ -103,59 +176,6 @@ export function EventViewScreen() {
       </div>
     );
   }
-
-  // Convert event times to dates for the grid
-  const expandedTimes = useMemo(() => expandTimes(event.times), [event.times]);
-  
-  // Calculate dates and time range from event times
-  const { dates, startTime, endTime } = useMemo(() => {
-    if (expandedTimes.length === 0) return { dates: [], startTime: "9:00 AM", endTime: "5:00 PM" };
-    
-    // Extract unique dates and time range from time slots
-    const dateSet = new Set<string>();
-    const hours: number[] = [];
-    
-    expandedTimes.forEach(time => {
-      if (time.length === 13) { // HHmm-DDMMYYYY format
-        const dateStr = time.substring(5);
-        const day = dateStr.substring(0, 2);
-        const month = dateStr.substring(2, 4);
-        const year = dateStr.substring(4);
-        dateSet.add(`${year}-${month}-${day}`);
-        
-        // Extract hour
-        const hour = parseInt(time.substring(0, 2));
-        hours.push(hour);
-      }
-    });
-    
-    const dates = Array.from(dateSet).map(dateStr => {
-      const [year, month, day] = dateStr.split('-').map(Number);
-      return new Date(year, month - 1, day);
-    }).sort((a, b) => a.getTime() - b.getTime());
-    
-    // Calculate time range
-    const minHour = Math.min(...hours);
-    const maxHour = Math.max(...hours);
-    
-    const formatTime = (hour: number) => {
-      const period = hour >= 12 ? 'PM' : 'AM';
-      const hour12 = hour > 12 ? hour - 12 : hour === 0 ? 12 : hour;
-      return `${hour12}:00 ${period}`;
-    };
-    
-    return {
-      dates,
-      startTime: formatTime(minHour),
-      endTime: formatTime(maxHour + 1), // Add 1 hour for end time
-    };
-  }, [expandedTimes]);
-
-  // Convert PersonResponse to Person format
-  const peopleForCalculation: Person[] = useMemo(() => 
-    people.map(p => ({ name: p.name, availability: p.availability })),
-    [people]
-  );
 
   return (
     <AvailabilityGridScreen

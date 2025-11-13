@@ -57,5 +57,13 @@
       port: 3001,
       strictPort: true, // Fail if port is already in use instead of auto-incrementing
       open: true,
+      proxy: {
+        '^/api/.*': {
+          target: 'https://api.crab.fit',
+          changeOrigin: true,
+          secure: true,
+          rewrite: (path) => path.replace(/^\/api/, ''),
+        },
+      },
     },
   });

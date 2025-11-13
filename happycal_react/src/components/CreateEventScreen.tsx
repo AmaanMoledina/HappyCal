@@ -1,12 +1,16 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
 import { Label } from "./ui/label";
 import { Avatar, AvatarFallback } from "./ui/avatar";
-import { ArrowLeft, Calendar as CalendarIcon, Clock, Copy, Check, ExternalLink, Link2, Users } from "lucide-react";
+import { ArrowLeft, Calendar as CalendarIcon, Clock, Copy, Check, ExternalLink, Link2, Users, Loader2 } from "lucide-react";
+import { useAuthStore } from "../stores/authStore";
 import { Calendar } from "./ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "./ui/popover";
+import { createEvent } from "../config/api";
+import { generateTimeSlots } from "../utils/generateTimeSlots";
+import { useEventsStore } from "../stores/eventsStore";
 
 interface CreateEventScreenProps {
   onBack: () => void;
@@ -30,6 +34,9 @@ const smoothTransition = {
 };
 
 export function CreateEventScreen({ onBack, onViewGrid }: CreateEventScreenProps) {
+  console.log('=== CreateEventScreen RENDERED ===');
+  const { account } = useAuthStore();
+  const addEvent = useEventsStore((state) => state.addEvent);
   const [step, setStep] = useState<"create" | "link">("create");
   const [title, setTitle] = useState("");
   const [dates, setDates] = useState<Date[]>([]);
@@ -37,19 +44,106 @@ export function CreateEventScreen({ onBack, onViewGrid }: CreateEventScreenProps
   const [latestTime, setLatestTime] = useState("5:00 PM");
   const [linkCopied, setLinkCopied] = useState(false);
   const [generatedLink, setGeneratedLink] = useState("");
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [createdEventId, setCreatedEventId] = useState<string | null>(null);
+  const [timezone] = useState("America/New_York"); // Default timezone
 
-  const handleGenerate = () => {
-    if (!title || dates.length === 0) return;
+  // Get user initials from account
+  const userInitials = useMemo(() => {
+    if (account?.name) {
+      return account.name
+        .split(' ')
+        .map(n => n[0])
+        .join('')
+        .toUpperCase()
+        .slice(0, 2);
+    }
+    if (account?.username) {
+      return account.username[0].toUpperCase();
+    }
+    return 'U';
+  }, [account]);
+
+  const handleGenerate = async () => {
+    console.log('=== handleGenerate CALLED (CreateEventScreen) ===');
+    console.log('handleGenerate called', { title, dates: dates.length });
     
-    // Generate a mock shareable link
-    const linkId = Math.random().toString(36).substring(2, 10);
-    const link = `https://happycal.app/event/${linkId}`;
-    setGeneratedLink(link);
-    setStep("link");
+    if (!title) {
+      console.log('No title, returning early');
+      return;
+    }
+    if (dates.length === 0) {
+      console.log('No dates selected, returning early');
+      return;
+    }
+    
+    setIsLoading(true);
+    setError(null);
+    
+    try {
+      console.log('Generating time slots for specific dates', { dates, earliestTime, latestTime, timezone });
+      const timeSlots = generateTimeSlots(dates, earliestTime, latestTime, timezone);
+      console.log('Generated time slots:', timeSlots);
+      
+      if (timeSlots.length === 0) {
+        console.error("No time slots generated");
+        setError("No time slots generated. Please check your selections.");
+        setIsLoading(false);
+        return;
+      }
+
+      console.log('About to create event via API', { name: title, timesCount: timeSlots.length, timezone });
+      
+      const event = await createEvent({
+        name: title,
+        times: timeSlots,
+        timezone,
+      });
+      
+      console.log('Event created successfully:', event);
+
+      // Store the event in local storage
+      addEvent({
+        id: event.id,
+        name: event.name,
+        created_at: event.created_at,
+        times: event.times,
+        timezone: event.timezone,
+      });
+
+      // Generate the shareable link using the event ID from the API
+      if (!event.id) {
+        console.error("Event created but no ID returned:", event);
+        setError("Event created but no ID returned. Please try again.");
+        setIsLoading(false);
+        return;
+      }
+      
+      // Use current origin (localhost in dev, production domain in prod)
+      const origin = window.location.origin;
+      const link = `${origin}/${event.id}`;
+      console.log('Generated link:', link, 'Event ID:', event.id, 'Origin:', origin);
+      setGeneratedLink(link);
+      setCreatedEventId(event.id);
+      setStep("link");
+    } catch (err: any) {
+      console.error("Failed to create event:", err);
+      console.error("Error details:", {
+        message: err?.message,
+        status: err?.status,
+        statusText: err?.statusText,
+        stack: err?.stack,
+      });
+      setError(`Failed to create event: ${err?.message || err?.statusText || 'Unknown error'}. Check console for details.`);
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const handleCopyLink = async () => {
-    await navigator.clipboard.writeText(generatedLink);
+    const linkToCopy = generatedLink || (createdEventId ? `${window.location.origin}/${createdEventId}` : window.location.origin);
+    await navigator.clipboard.writeText(linkToCopy);
     setLinkCopied(true);
     setTimeout(() => setLinkCopied(false), 2000);
   };
@@ -87,7 +181,7 @@ export function CreateEventScreen({ onBack, onViewGrid }: CreateEventScreenProps
             Back
           </Button>
           <Avatar className="w-9 h-9 ring-2 ring-white/60 shadow-lg">
-            <AvatarFallback className="bg-gradient-to-br from-sky-500 to-blue-600 text-white">JD</AvatarFallback>
+            <AvatarFallback className="bg-gradient-to-br from-sky-500 to-blue-600 text-white">{userInitials}</AvatarFallback>
           </Avatar>
         </div>
       </header>
@@ -244,18 +338,41 @@ export function CreateEventScreen({ onBack, onViewGrid }: CreateEventScreenProps
                     </div>
                   </motion.div>
 
+                  {error && (
+                    <motion.div
+                      initial={{ opacity: 0, y: -10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      className="p-3 rounded-lg bg-red-100 border border-red-300 text-red-700 text-sm"
+                    >
+                      {error}
+                    </motion.div>
+                  )}
+
                   <motion.div
                     initial={{ opacity: 0, y: 20 }}
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ delay: 0.5 }}
                   >
                     <Button
-                      onClick={handleGenerate}
-                      disabled={!title || dates.length === 0}
+                      onClick={(e) => {
+                        console.log('=== BUTTON CLICKED (CreateEventScreen) ===', e);
+                        console.log('Button state:', { title, isLoading, datesLength: dates.length });
+                        handleGenerate();
+                      }}
+                      disabled={!title || isLoading || dates.length === 0}
                       className="w-full bg-gradient-to-r from-sky-500 to-blue-600 hover:from-sky-600 hover:to-blue-700 shadow-lg shadow-sky-500/30 border-0 disabled:opacity-50 disabled:cursor-not-allowed"
                     >
-                      <Link2 className="w-4 h-4 mr-2" />
-                      Generate Scheduling Link
+                      {isLoading ? (
+                        <>
+                          <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                          Creating Event...
+                        </>
+                      ) : (
+                        <>
+                          <Link2 className="w-4 h-4 mr-2" />
+                          Generate Scheduling Link
+                        </>
+                      )}
                     </Button>
                   </motion.div>
                 </div>
@@ -340,7 +457,7 @@ export function CreateEventScreen({ onBack, onViewGrid }: CreateEventScreenProps
                   </div>
                   <div className="flex gap-2">
                     <div className="flex-1 px-4 py-3 backdrop-blur-sm bg-white/40 border border-white/50 rounded-lg text-gray-900 text-sm break-all font-mono">
-                      {generatedLink}
+                      {generatedLink || (createdEventId ? `${window.location.origin}/${createdEventId}` : 'Generating link...')}
                     </div>
                     <Button
                       onClick={handleCopyLink}

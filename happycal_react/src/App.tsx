@@ -5,8 +5,11 @@ import { DashboardScreen } from "./components/DashboardScreen";
 import { GroupDetailsScreen } from "./components/GroupDetailsScreen";
 import { CreateMeetingScreen } from "./components/CreateMeetingScreen";
 import { CreateEventScreen } from "./components/CreateEventScreen";
+import { CreateGroupScreen } from "./components/CreateGroupScreen";
 import { AvailabilityGridScreen } from "./components/AvailabilityGridScreen";
 import { EventViewScreen } from "./components/EventViewScreen";
+import { GroupInviteScreen } from "./components/GroupInviteScreen";
+import { useGroupsStore } from "./stores/groupsStore";
 
 type Screen = 
   | { type: "login" }
@@ -14,34 +17,9 @@ type Screen =
   | { type: "groupDetails"; groupId: string }
   | { type: "createMeeting"; groupId: string }
   | { type: "createEvent" }
+  | { type: "createGroup" }
   | { type: "availabilityGrid"; groupId?: string; meetingTitle: string; dates?: Date[]; startTime?: string; endTime?: string };
 
-// Mock data
-const mockGroups = [
-  { id: "1", name: "FINC-440 Study Group", memberCount: 8 },
-  { id: "2", name: "Kellogg Marketing Club", memberCount: 12 },
-  { id: "3", name: "KWEST Section 4", memberCount: 6 },
-  { id: "4", name: "Tech Club Leadership", memberCount: 5 },
-  { id: "5", name: "Consulting Case Prep", memberCount: 15 },
-  { id: "6", name: "Social Impact Lab", memberCount: 7 },
-];
-
-const mockMembers = [
-  { id: "1", name: "John Doe", initials: "JD" },
-  { id: "2", name: "Jane Smith", initials: "JS" },
-  { id: "3", name: "Mike Johnson", initials: "MJ" },
-  { id: "4", name: "Sarah Williams", initials: "SW" },
-  { id: "5", name: "Tom Brown", initials: "TB" },
-  { id: "6", name: "Emily Davis", initials: "ED" },
-  { id: "7", name: "Chris Wilson", initials: "CW" },
-  { id: "8", name: "Anna Taylor", initials: "AT" },
-];
-
-const mockMeetings = [
-  { id: "1", title: "Finance Final Exam Prep", date: "Nov 15, 2025", time: "2:00 PM" },
-  { id: "2", title: "Case Competition Debrief", date: "Nov 18, 2025", time: "10:00 AM" },
-  { id: "3", title: "KWEST Happy Hour Planning", date: "Nov 22, 2025", time: "3:30 PM" },
-];
 
 export default function App() {
   const [currentScreen, setCurrentScreen] = useState<Screen>({ type: "login" });
@@ -113,6 +91,15 @@ export default function App() {
     setCurrentScreen({ type: "createEvent" });
   };
 
+  const handleCreateGroup = () => {
+    setCurrentScreen({ type: "createGroup" });
+  };
+
+  const handleGroupCreated = (groupId: string) => {
+    // After creating a group, go back to dashboard
+    setCurrentScreen({ type: "dashboard" });
+  };
+
   const handleViewEventGrid = (data: {
     title: string;
     dates: Date[];
@@ -128,8 +115,10 @@ export default function App() {
     });
   };
 
+  const { getGroup } = useGroupsStore();
+
   const getGroupName = (groupId: string) => {
-    return mockGroups.find((g) => g.id === groupId)?.name || "";
+    return getGroup(groupId)?.name || "";
   };
 
   const location = useLocation();
@@ -140,12 +129,24 @@ export default function App() {
     !location.pathname.startsWith('/dashboard') &&
     !location.pathname.startsWith('/login') &&
     !location.pathname.startsWith('/create') &&
+    !location.pathname.startsWith('/group/') &&
     location.pathname.split('/').length === 2; // Single path segment
+
+  // Check if we're viewing a group invite
+  const isGroupInviteRoute = location.pathname.startsWith('/group/');
 
   if (isEventRoute) {
     return (
       <Routes>
         <Route path="/:eventId" element={<EventViewScreen />} />
+      </Routes>
+    );
+  }
+
+  if (isGroupInviteRoute) {
+    return (
+      <Routes>
+        <Route path="/group/:groupId" element={<GroupInviteScreen />} />
       </Routes>
     );
   }
@@ -158,18 +159,23 @@ export default function App() {
 
       {currentScreen.type === "dashboard" && (
         <DashboardScreen
-          groups={mockGroups}
           onGroupClick={handleGroupClick}
           onScheduleMeeting={handleScheduleMeeting}
           onScheduleEvent={handleScheduleEvent}
+          onCreateGroup={handleCreateGroup}
+        />
+      )}
+
+      {currentScreen.type === "createGroup" && (
+        <CreateGroupScreen
+          onBack={handleBackToDashboard}
+          onGroupCreated={handleGroupCreated}
         />
       )}
 
       {currentScreen.type === "groupDetails" && (
         <GroupDetailsScreen
-          groupName={getGroupName(currentScreen.groupId)}
-          members={mockMembers}
-          meetings={mockMeetings}
+          groupId={currentScreen.groupId}
           onBack={handleBackToDashboard}
           onCreateMeeting={() => handleScheduleMeeting(currentScreen.groupId)}
           onViewMeeting={(meetingId) => {

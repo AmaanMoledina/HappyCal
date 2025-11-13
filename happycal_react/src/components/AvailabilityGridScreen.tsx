@@ -4,6 +4,7 @@ import { Avatar, AvatarFallback } from "./ui/avatar";
 import { ArrowLeft, Copy, Check } from "lucide-react";
 import { calculateTable, calculateAvailability, expandTimes, type Person } from "../utils";
 import { generateTimeSlots } from "../utils/generateTimeSlots";
+import { useAuthStore } from "../stores/authStore";
 
 interface AvailabilityGridScreenProps {
   meetingTitle: string;
@@ -28,6 +29,23 @@ export function AvailabilityGridScreen({
   onBack, 
   onConfirmTime 
 }: AvailabilityGridScreenProps) {
+  const { account } = useAuthStore();
+  
+  // Get user initials from account
+  const userInitials = useMemo(() => {
+    if (account?.name) {
+      return account.name
+        .split(' ')
+        .map(n => n[0])
+        .join('')
+        .toUpperCase()
+        .slice(0, 2);
+    }
+    if (account?.username) {
+      return account.username[0].toUpperCase();
+    }
+    return 'U';
+  }, [account]);
   const [selectedSlots, setSelectedSlots] = useState<Set<string>>(new Set());
   const [isDragging, setIsDragging] = useState(false);
   const [dragMode, setDragMode] = useState<"add" | "remove">("add");
@@ -60,32 +78,15 @@ export function AvailabilityGridScreen({
     });
   }, [expandedTimes, locale, timezone]);
 
-  // Use provided people data or generate mock data
+  // Use provided people data only (no mock data)
   const people: Person[] = useMemo(() => {
     if (providedPeople && providedPeople.length > 0) {
       return providedPeople;
     }
     
-    // Generate mock availability if no real data provided
-    const mockPeople: Person[] = [
-      { name: "John Doe", availability: [] },
-      { name: "Jane Smith", availability: [] },
-      { name: "Mike Johnson", availability: [] },
-      { name: "Sarah Williams", availability: [] },
-    ];
-
-    // Randomly assign some availability
-    expandedTimes.forEach(slot => {
-      if (Math.random() > 0.6) {
-        const randomPerson = mockPeople[Math.floor(Math.random() * mockPeople.length)];
-        if (!randomPerson.availability.includes(slot)) {
-          randomPerson.availability.push(slot);
-        }
-      }
-    });
-
-    return mockPeople;
-  }, [providedPeople, expandedTimes]);
+    // Return empty array if no real data provided (no mock data)
+    return [];
+  }, [providedPeople]);
 
   // Calculate group availability
   const { availabilities, min, max } = useMemo(() => {
@@ -230,7 +231,7 @@ export function AvailabilityGridScreen({
             Back
           </Button>
           <Avatar className="w-9 h-9 ring-2 ring-white/60 shadow-lg">
-            <AvatarFallback className="bg-gradient-to-br from-sky-500 to-blue-600 text-white">JD</AvatarFallback>
+            <AvatarFallback className="bg-gradient-to-br from-sky-500 to-blue-600 text-white">{userInitials}</AvatarFallback>
           </Avatar>
         </div>
       </header>

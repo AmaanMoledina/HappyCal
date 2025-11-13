@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "motion/react";
 import { Button } from "./ui/button";
@@ -11,6 +11,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "./ui/popover";
 import { createEvent } from "../config/api";
 import { generateTimeSlots } from "../utils/generateTimeSlots";
 import { useEventsStore } from "../stores/eventsStore";
+import { useAuthStore } from "../stores/authStore";
 
 interface CreateMeetingScreenProps {
   groupName: string;
@@ -36,7 +37,9 @@ const smoothTransition = {
 };
 
 export function CreateMeetingScreen({ groupName, onBack, onCreateMeeting }: CreateMeetingScreenProps) {
+  console.log('=== CreateMeetingScreen RENDERED ===', { groupName });
   const navigate = useNavigate();
+  const { account } = useAuthStore();
   const addEvent = useEventsStore((state) => state.addEvent);
   const [step, setStep] = useState<"create" | "link">("create");
   const [title, setTitle] = useState("");
@@ -53,10 +56,38 @@ export function CreateMeetingScreen({ groupName, onBack, onCreateMeeting }: Crea
   const [recurrenceFrequency, setRecurrenceFrequency] = useState<"weekly" | "biweekly">("weekly");
   const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
 
+  // Get user initials from account
+  const userInitials = useMemo(() => {
+    if (account?.name) {
+      return account.name
+        .split(' ')
+        .map(n => n[0])
+        .join('')
+        .toUpperCase()
+        .slice(0, 2);
+    }
+    if (account?.username) {
+      return account.username[0].toUpperCase();
+    }
+    return 'U';
+  }, [account]);
+
   const handleGenerate = async () => {
-    if (!title) return;
-    if (eventType === "specific" && dates.length === 0) return;
-    if (eventType === "recurring" && selectedWeekdays.length === 0) return;
+    console.log('=== handleGenerate CALLED ===');
+    console.log('handleGenerate called', { title, eventType, dates: dates.length, selectedWeekdays: selectedWeekdays.length });
+    
+    if (!title) {
+      console.log('No title, returning early');
+      return;
+    }
+    if (eventType === "specific" && dates.length === 0) {
+      console.log('No dates selected, returning early');
+      return;
+    }
+    if (eventType === "recurring" && selectedWeekdays.length === 0) {
+      console.log('No weekdays selected, returning early');
+      return;
+    }
     
     setIsLoading(true);
     setError(null);
@@ -66,7 +97,9 @@ export function CreateMeetingScreen({ groupName, onBack, onCreateMeeting }: Crea
       
       if (eventType === "specific") {
         // Generate time slots for specific dates
+        console.log('Generating time slots for specific dates', { dates, earliestTime, latestTime, timezone });
         timeSlots = generateTimeSlots(dates, earliestTime, latestTime, timezone);
+        console.log('Generated time slots:', timeSlots);
       } else {
         // Generate time slots for recurring weekdays
         const parseTime = (timeStr: string): { hour: number; minute: number } => {
@@ -139,17 +172,22 @@ export function CreateMeetingScreen({ groupName, onBack, onCreateMeeting }: Crea
       }
       
       if (timeSlots.length === 0) {
+        console.error("No time slots generated");
         setError("No time slots generated. Please check your selections.");
         setIsLoading(false);
         return;
       }
 
+      console.log('About to create event via API', { name: title, timesCount: timeSlots.length, timezone });
+      
       // Create event via API
       const event = await createEvent({
         name: title,
         times: timeSlots,
         timezone,
       });
+      
+      console.log('Event created successfully:', event);
 
       // Store the event in local storage
       addEvent({
@@ -161,20 +199,37 @@ export function CreateMeetingScreen({ groupName, onBack, onCreateMeeting }: Crea
       });
 
       // Generate the shareable link using the event ID from the API
-      const link = `${window.location.origin}/${event.id}`;
+      if (!event.id) {
+        console.error("Event created but no ID returned:", event);
+        setError("Event created but no ID returned. Please try again.");
+        setIsLoading(false);
+        return;
+      }
+      
+      // Use current origin (localhost in dev, production domain in prod)
+      const origin = window.location.origin;
+      const link = `${origin}/${event.id}`;
+      console.log('Generated link:', link, 'Event ID:', event.id, 'Origin:', origin);
       setGeneratedLink(link);
       setCreatedEventId(event.id);
       setStep("link");
-    } catch (err) {
+    } catch (err: any) {
       console.error("Failed to create event:", err);
-      setError("Failed to create event. Please try again.");
+      console.error("Error details:", {
+        message: err?.message,
+        status: err?.status,
+        statusText: err?.statusText,
+        stack: err?.stack,
+      });
+      setError(`Failed to create event: ${err?.message || err?.statusText || 'Unknown error'}. Check console for details.`);
     } finally {
       setIsLoading(false);
     }
   };
 
   const handleCopyLink = async () => {
-    await navigator.clipboard.writeText(generatedLink);
+    const linkToCopy = generatedLink || (createdEventId ? `${window.location.origin}/${createdEventId}` : window.location.origin);
+    await navigator.clipboard.writeText(linkToCopy);
     setLinkCopied(true);
     setTimeout(() => setLinkCopied(false), 2000);
   };
@@ -212,7 +267,7 @@ export function CreateMeetingScreen({ groupName, onBack, onCreateMeeting }: Crea
             Back
           </Button>
           <Avatar className="w-9 h-9 ring-2 ring-white/60 shadow-lg">
-            <AvatarFallback className="bg-gradient-to-br from-sky-500 to-blue-600 text-white">JD</AvatarFallback>
+            <AvatarFallback className="bg-gradient-to-br from-sky-500 to-blue-600 text-white">{userInitials}</AvatarFallback>
           </Avatar>
         </div>
       </header>
@@ -504,7 +559,15 @@ export function CreateMeetingScreen({ groupName, onBack, onCreateMeeting }: Crea
                     transition={{ delay: 0.5 }}
                   >
                     <Button
-                      onClick={handleGenerate}
+                      onClick={(e) => {
+                        console.log('=== BUTTON CLICKED ===', e);
+                        console.log('Button state:', { title, isLoading, eventType, datesLength: dates.length, selectedWeekdaysLength: selectedWeekdays.length });
+                        // Alert as fallback to verify click
+                        if (process.env.NODE_ENV === 'development') {
+                          console.warn('BUTTON CLICKED - This should be visible!');
+                        }
+                        handleGenerate();
+                      }}
                       disabled={
                         !title || 
                         isLoading ||
@@ -623,7 +686,7 @@ export function CreateMeetingScreen({ groupName, onBack, onCreateMeeting }: Crea
                   </div>
                   <div className="flex gap-2">
                     <div className="flex-1 px-4 py-3 backdrop-blur-sm bg-white/40 border border-white/50 rounded-lg text-gray-900 text-sm break-all font-mono">
-                      {generatedLink}
+                      {generatedLink || (createdEventId ? `${window.location.origin}/${createdEventId}` : 'Generating link...')}
                     </div>
                     <Button
                       onClick={handleCopyLink}
