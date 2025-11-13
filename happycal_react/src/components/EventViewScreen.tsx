@@ -2,19 +2,27 @@ import { useState, useEffect, useMemo } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { Button } from "./ui/button";
 import { Avatar, AvatarFallback } from "./ui/avatar";
-import { ArrowLeft, Copy, Check, Loader2 } from "lucide-react";
+import { ArrowLeft, Copy, Check, Loader2, Lock } from "lucide-react";
 import { getEvent, getPeople, type EventResponse, type PersonResponse } from "../config/api";
 import { calculateTable, calculateAvailability, expandTimes, type Person } from "../utils";
 import { AvailabilityGridScreen } from "./AvailabilityGridScreen";
+import { useAuthStore } from "../stores/authStore";
+import { useMsal } from "@azure/msal-react";
+import { LoginRequest } from "@azure/msal-browser";
+import OutlookIcon from "./OutlookIcon";
 
 export function EventViewScreen() {
   const { eventId } = useParams<{ eventId: string }>();
   const navigate = useNavigate();
+  const { instance } = useMsal();
+  const { account, setAccount, setAccessToken, isAuthenticated } = useAuthStore();
   const [event, setEvent] = useState<EventResponse | null>(null);
   const [people, setPeople] = useState<PersonResponse[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
+  const [isLoggingIn, setIsLoggingIn] = useState(false);
+  const [loginError, setLoginError] = useState<string | null>(null);
   const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
   const locale = navigator.language || 'en-US';
 
@@ -74,7 +82,7 @@ export function EventViewScreen() {
     [people]
   );
 
-  // Fetch event data
+  // Fetch event data (even if not authenticated, so we can show event name in login prompt)
   useEffect(() => {
     if (!eventId) {
       setError("Event ID is required");
@@ -82,22 +90,29 @@ export function EventViewScreen() {
       return;
     }
 
-    const fetchData = async () => {
+    const fetchEventData = async () => {
       try {
         setIsLoading(true);
         setError(null);
         
         console.log('Fetching event:', eventId);
         
-        // Fetch event and people data in parallel
-        const [eventData, peopleData] = await Promise.all([
-          getEvent(eventId),
-          getPeople(eventId).catch(() => []), // People might not exist yet
-        ]);
-
+        // Fetch event data (this can be done without auth)
+        const eventData = await getEvent(eventId);
+        
         console.log('Event data received:', eventData);
         setEvent(eventData);
-        setPeople(peopleData);
+        
+        // Only fetch people data if authenticated
+        if (isAuthenticated()) {
+          try {
+            const peopleData = await getPeople(eventId);
+            setPeople(peopleData);
+          } catch (err) {
+            console.warn('Failed to fetch people data:', err);
+            setPeople([]);
+          }
+        }
       } catch (err: any) {
         console.error("Failed to fetch event:", err);
         console.error("Error details:", {
@@ -120,12 +135,45 @@ export function EventViewScreen() {
       }
     };
 
-    fetchData();
+    fetchEventData();
+  }, [eventId]);
+
+  // Fetch people data when user becomes authenticated
+  useEffect(() => {
+    if (!eventId || !isAuthenticated()) {
+      setPeople([]);
+      return;
+    }
+
+    // Immediately fetch people data when authenticated
+    const fetchPeopleData = async () => {
+      try {
+        const peopleData = await getPeople(eventId);
+        setPeople(peopleData);
+      } catch (err) {
+        console.warn('Failed to fetch people data:', err);
+        setPeople([]);
+      }
+    };
+
+    fetchPeopleData();
 
     // Poll for updates every 5 seconds
-    const interval = setInterval(fetchData, 5000);
+    const interval = setInterval(async () => {
+      try {
+        const [eventData, peopleData] = await Promise.all([
+          getEvent(eventId),
+          getPeople(eventId).catch(() => []),
+        ]);
+        setEvent(eventData);
+        setPeople(peopleData);
+      } catch (err) {
+        console.error('Failed to refresh event data:', err);
+      }
+    }, 5000);
+    
     return () => clearInterval(interval);
-  }, [eventId]);
+  }, [eventId, account]); // Re-run when account changes (login/logout)
 
   const handleCopyLink = () => {
     if (event) {
@@ -134,6 +182,102 @@ export function EventViewScreen() {
       setTimeout(() => setCopied(false), 2000);
     }
   };
+
+  const handleLogin = async () => {
+    setIsLoggingIn(true);
+    setLoginError(null);
+    
+    try {
+      const redirectUri = import.meta.env.VITE_AZURE_REDIRECT_URI || window.location.origin;
+      
+      const loginRequest: LoginRequest = {
+        scopes: ['User.Read', 'email', 'profile'],
+        redirectUri: redirectUri,
+      };
+
+      const response = await instance.loginPopup(loginRequest);
+      
+      if (response.account) {
+        setAccount(response.account);
+        
+        try {
+          const tokenResponse = await instance.acquireTokenSilent({
+            scopes: loginRequest.scopes,
+            account: response.account,
+          });
+          
+          setAccessToken(tokenResponse.accessToken);
+        } catch (tokenError: any) {
+          console.error("Token acquisition error:", tokenError);
+          setLoginError(`Failed to get access token: ${tokenError.message || 'Unknown error'}`);
+        }
+      } else {
+        setLoginError('No account returned from login');
+      }
+    } catch (error: any) {
+      console.error("Login error:", error);
+      
+      if (error.errorCode === 'user_cancelled') {
+        setLoginError('Sign-in was cancelled. Please try again.');
+      } else if (error.errorCode === 'popup_window_error') {
+        setLoginError('Popup was blocked. Please allow popups for this site and try again.');
+      } else {
+        setLoginError(`Sign-in failed: ${error.message || error.errorCode || 'Unknown error'}`);
+      }
+    } finally {
+      setIsLoggingIn(false);
+    }
+  };
+
+  // Check authentication - show login prompt if not authenticated
+  if (!isAuthenticated()) {
+    return (
+      <div className="min-h-screen flex items-center justify-center px-6 bg-gradient-to-br from-sky-100 via-blue-50 to-cyan-100">
+        <div className="backdrop-blur-2xl bg-white/15 border border-white/20 rounded-2xl shadow-2xl p-8 max-w-md w-full">
+          <div className="text-center space-y-6">
+            <div className="w-16 h-16 rounded-full bg-gradient-to-br from-sky-400 to-blue-500 shadow-lg shadow-sky-500/50 flex items-center justify-center mx-auto">
+              <Lock className="w-8 h-8 text-white" />
+            </div>
+            <div>
+              <h2 className="text-gray-900 mb-2">Sign in Required</h2>
+              <p className="text-gray-600">
+                You need to sign in with your Outlook account to view and respond to this event.
+              </p>
+            </div>
+            {event && (
+              <div className="backdrop-blur-sm bg-white/20 border border-white/30 rounded-lg p-4">
+                <p className="text-sm text-gray-600 mb-1">Event:</p>
+                <p className="text-gray-900 font-medium">{event.name}</p>
+              </div>
+            )}
+            <Button
+              onClick={handleLogin}
+              disabled={isLoggingIn}
+              className="w-full bg-gradient-to-r from-sky-500 to-blue-600 hover:from-sky-600 hover:to-blue-700 shadow-lg shadow-sky-500/30 border-0"
+              size="lg"
+            >
+              {isLoggingIn ? (
+                <>
+                  <div className="w-5 h-5 mr-2 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                  <span>Signing in...</span>
+                </>
+              ) : (
+                <>
+                  <OutlookIcon className="w-5 h-5 mr-2" />
+                  <span>Sign in with Outlook</span>
+                </>
+              )}
+            </Button>
+            {loginError && (
+              <div className="p-3 bg-red-500/20 border border-red-500/50 rounded-lg text-sm text-red-700">
+                {loginError}
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   if (isLoading) {
     return (
